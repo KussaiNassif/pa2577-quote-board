@@ -1,0 +1,82 @@
+# quotes-api: "owns" the quote data (the only service with database access).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quotes-api-config
+  namespace: quoteboard
+data:
+  MONGO_HOST: "mongo:27017"
+  MONGO_DB: "quotes"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quotes-api
+  namespace: quoteboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: quotes-api
+  template:
+    metadata:
+      labels:
+        app: quotes-api
+    spec:
+      containers:
+        - name: quotes-api
+          image: kussainassif/quotes-api:1.0.2
+          ports:
+            - containerPort: 3000
+          env:
+            - name: MONGO_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: quotes-api-config
+                  key: MONGO_HOST
+            - name: MONGO_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: quotes-api-config
+                  key: MONGO_DB
+            - name: MONGO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: username
+            - name: MONGO_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: password
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: quotes-api
+  namespace: quoteboard
+spec:
+  selector:
+    app: quotes-api
+  ports:
+    - port: 3000
+      targetPort: 3000
